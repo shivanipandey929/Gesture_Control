@@ -1,6 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { User, Session } from '@supabase/supabase-js';
-import { supabase, isSupabaseConfigured } from '../services/supabase';
+import type { User, Session, AuthError } from '@supabase/supabase-js';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+
+interface AuthResponse {
+  error: AuthError | Error | null;
+  needsEmailConfirmation?: boolean;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -9,9 +14,9 @@ interface AuthContextType {
   isLoading: boolean;
   isConfigured: boolean;
   continueAsGuest: () => void;
-  signInWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<{ error: Error | null }>;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
+  signInWithEmail: (email: string, password: string) => Promise<AuthResponse>;
+  signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<AuthResponse>;
+  signInWithGoogle: () => Promise<AuthResponse>;
   signOut: () => Promise<void>;
 }
 
@@ -32,22 +37,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Check active session
+    // Check active session from localStorage
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
         setIsGuest(false);
         localStorage.setItem('aerotouch_auth_mode', 'authenticated');
+      } else {
+        const mode = localStorage.getItem('aerotouch_auth_mode');
+        setIsGuest(mode !== 'authenticated');
       }
       setIsLoading(false);
+    }).catch(() => {
+      setIsLoading(false);
+      setIsGuest(true);
     });
 
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
+    // Listen for auth state changes (e.g. login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setUser(newSession?.user ?? null);
+      if (newSession?.user) {
         setIsGuest(false);
         localStorage.setItem('aerotouch_auth_mode', 'authenticated');
       } else {
@@ -64,46 +75,109 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('aerotouch_auth_mode', 'guest');
   };
 
-  const signInWithEmail = async (email: string, password: string) => {
-    if (!supabase) return { error: new Error('Supabase is not configured yet. Please provide .env keys.') };
-    const res = await supabase.auth.signInWithPassword({ email, password });
-    if (!res.error && res.data.user) {
-      setIsGuest(false);
-      localStorage.setItem('aerotouch_auth_mode', 'authenticated');
+  const signInWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
+    if (!supabase) {
+      return {
+        error: new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.')
+      };
     }
-    return { error: res.error };
+
+    try {
+      const res = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
+      });
+
+      if (res.error) {
+        return { error: res.error };
+      }
+
+      if (res.data.session) {
+        setSession(res.data.session);
+        setUser(res.data.user);
+        setIsGuest(false);
+        localStorage.setItem('aerotouch_auth_mode', 'authenticated');
+      }
+
+      return { error: null };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error(String(err)) };
+    }
   };
 
-  const signUpWithEmail = async (email: string, password: string, displayName?: string) => {
-    if (!supabase) return { error: new Error('Supabase is not configured yet. Please provide .env keys.') };
-    const res = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: displayName || email.split('@')[0] },
-      },
-    });
-    if (!res.error && res.data.user) {
-      setIsGuest(false);
-      localStorage.setItem('aerotouch_auth_mode', 'authenticated');
+  const signUpWithEmail = async (email: string, password: string, displayName?: string): Promise<AuthResponse> => {
+    if (!supabase) {
+      return {
+        error: new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.')
+      };
     }
-    return { error: res.error };
+
+    try {
+      const trimmedEmail = email.trim();
+      const res = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+        options: {
+          data: {
+            full_name: displayName?.trim() || trimmedEmail.split('@')[0]
+          },
+        },
+      });
+
+      if (res.error) {
+        return { error: res.error };
+      }
+
+      // Check if user already exists (Supabase returns empty identities array when user already exists and email confirm is on)
+      if (res.data.user && res.data.user.identities && res.data.user.identities.length === 0) {
+        return {
+          error: new Error('An account with this email already exists. Please switch to Sign In.')
+        };
+      }
+
+      // If Supabase requires email confirmation, session will be null
+      if (res.data.user && !res.data.session) {
+        return { error: null, needsEmailConfirmation: true };
+      }
+
+      // If auto-confirmed
+      if (res.data.session) {
+        setSession(res.data.session);
+        setUser(res.data.user);
+        setIsGuest(false);
+        localStorage.setItem('aerotouch_auth_mode', 'authenticated');
+      }
+
+      return { error: null, needsEmailConfirmation: false };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error(String(err)) };
+    }
   };
 
-  const signInWithGoogle = async () => {
-    if (!supabase) return { error: new Error('Supabase is not configured yet.') };
-    const res = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-      },
-    });
-    return { error: res.error };
+  const signInWithGoogle = async (): Promise<AuthResponse> => {
+    if (!supabase) {
+      return { error: new Error('Supabase is not configured.') };
+    }
+    try {
+      const res = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: typeof window !== 'undefined' ? `${window.location.origin}/studio` : undefined,
+        },
+      });
+      return { error: res.error };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error(String(err)) };
+    }
   };
 
   const signOut = async () => {
     if (supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.warn('Sign out error:', err);
+      }
     }
     setUser(null);
     setSession(null);
@@ -138,4 +212,3 @@ export function useAuth() {
   }
   return context;
 }
-

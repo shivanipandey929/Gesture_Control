@@ -4,11 +4,13 @@ import { useAuth } from '../context/AuthContext';
 import {
   Lock,
   Mail,
-  User,
+  User as UserIcon,
   ArrowRight,
   ShieldCheck,
-  Info,
-  CheckCircle2
+  AlertCircle,
+  CheckCircle2,
+  LogOut,
+  Compass
 } from 'lucide-react';
 
 export const AuthPage: React.FC = () => {
@@ -23,33 +25,49 @@ export const AuthPage: React.FC = () => {
     signOut
   } = useAuth();
 
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successNotice, setSuccessNotice] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    setSuccessNotice(null);
+    setInfoMessage(null);
+
+    if (password.length < 6) {
+      setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      if (isSignUp) {
-        const { error } = await signUpWithEmail(email, password, displayName);
-        if (error) setErrorMessage(error.message);
-        else {
-          setSuccessNotice('Account created successfully! Check your email if confirmation is required.');
-          setTimeout(() => navigate('/studio'), 1500);
+      if (authMode === 'signup') {
+        const { error, needsEmailConfirmation } = await signUpWithEmail(email, password, displayName);
+        if (error) {
+          setErrorMessage(error.message);
+        } else if (needsEmailConfirmation) {
+          setInfoMessage('Check your email to confirm your account.');
+        } else {
+          setInfoMessage('Account created and signed in! Redirecting to Studio...');
+          setTimeout(() => navigate('/studio'), 1000);
         }
       } else {
         const { error } = await signInWithEmail(email, password);
-        if (error) setErrorMessage(error.message);
-        else {
-          navigate('/studio');
+        if (error) {
+          // Provide friendly real message
+          if (error.message.toLowerCase().includes('invalid login credentials')) {
+            setErrorMessage('Invalid login credentials. Please check your email and password.');
+          } else {
+            setErrorMessage(error.message);
+          }
+        } else {
+          setInfoMessage('Signed in successfully! Redirecting...');
+          setTimeout(() => navigate('/studio'), 600);
         }
       }
     } finally {
@@ -64,89 +82,114 @@ export const AuthPage: React.FC = () => {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl glass-panel-glow border border-cyan-500/30 bg-[#0B1020]/90 shadow-2xl flex flex-col gap-6">
+      <div className="w-full max-w-md p-6 sm:p-8 rounded-3xl glass-panel-glow border border-cyan-500/30 bg-[#0B1020]/95 shadow-2xl flex flex-col gap-6">
+
         {/* Header */}
         <div className="text-center">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-800/60 text-xs font-mono text-cyan-300 mb-3">
             <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Encrypted Cloud Sync</span>
+            <span>Secure Cloud Sync</span>
           </div>
           <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-white mb-1">
-            {user ? 'My AeroTouch Account' : isSignUp ? 'Create an Account' : 'Welcome to AeroTouch'}
+            {user ? 'Signed In' : authMode === 'signup' ? 'Create an Account' : 'Welcome to AeroTouch'}
           </h1>
           <p className="text-xs text-slate-400">
             {user
-              ? `Signed in as ${user.email}`
-              : 'Sync custom trained gestures and usage analytics across all your devices.'}
+              ? `Currently authenticated as ${user.email}`
+              : 'Sync custom trained gestures, workspaces, and telemetry across your devices.'}
           </p>
         </div>
 
-        {/* If already logged in */}
+        {/* If user is already signed in */}
         {user ? (
           <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2 text-xs">
-              <div className="flex justify-between text-slate-400">
-                <span>User ID:</span>
-                <span className="font-mono text-cyan-300 truncate max-w-[180px]">{user.id}</span>
+            <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2 text-xs">
+              <div className="flex justify-between items-center text-slate-400">
+                <span>Account Email:</span>
+                <span className="font-heading font-bold text-white text-sm">{user.email}</span>
               </div>
-              <div className="flex justify-between text-slate-400">
-                <span>Email:</span>
-                <span className="text-white font-medium">{user.email}</span>
+              <div className="flex justify-between items-center text-slate-400">
+                <span>Status:</span>
+                <span className="text-emerald-400 font-mono font-semibold flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  Authenticated
+                </span>
               </div>
             </div>
 
             <button
-              onClick={() => signOut()}
-              className="w-full py-2.5 rounded-xl border border-rose-500/40 text-rose-300 font-heading text-xs font-semibold hover:bg-rose-950/40"
-            >
-              Sign Out
-            </button>
-            <button
               onClick={() => navigate('/studio')}
-              className="w-full py-2.5 rounded-xl bg-cyan-400 text-slate-950 font-heading text-xs font-bold hover:bg-cyan-300"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-300 text-slate-950 font-heading text-xs font-bold hover:opacity-90 shadow-glow-cyan flex items-center justify-center gap-2"
             >
-              Continue to Studio
+              <span>Launch Studio</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => signOut()}
+              className="w-full py-2.5 rounded-xl border border-rose-500/40 text-rose-300 font-heading text-xs font-semibold hover:bg-rose-950/40 flex items-center justify-center gap-2"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign Out
             </button>
           </div>
         ) : (
           <>
-            {/* Notices */}
+            {/* Prominent Segmented Toggle between Sign In and Sign Up */}
+            <div className="grid grid-cols-2 p-1.5 rounded-2xl bg-slate-950/90 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('signin');
+                  setErrorMessage(null);
+                  setInfoMessage(null);
+                }}
+                className={`py-2 rounded-xl text-xs font-heading font-bold transition-all ${authMode === 'signin'
+                    ? 'bg-gradient-to-r from-cyan-500 to-cyan-400 text-slate-950 shadow-glow-cyan'
+                    : 'text-slate-400 hover:text-white'
+                  }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('signup');
+                  setErrorMessage(null);
+                  setInfoMessage(null);
+                }}
+                className={`py-2 rounded-xl text-xs font-heading font-bold transition-all ${authMode === 'signup'
+                    ? 'bg-gradient-to-r from-cyan-500 to-cyan-400 text-slate-950 shadow-glow-cyan'
+                    : 'text-slate-400 hover:text-white'
+                  }`}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            {/* Supabase unconfigured warning if .env is missing */}
             {!isConfigured && (
-              <div className="p-3 rounded-xl bg-amber-950/50 border border-amber-600/50 text-amber-300 text-xs flex items-start gap-2">
-                <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                <span>
-                  Supabase keys are not set in <code>.env</code> yet. You can click <strong>"Continue as Guest"</strong> to test all features with offline IndexedDB storage!
-                </span>
+              <div className="p-3 rounded-xl bg-amber-950/60 border border-amber-600/60 text-amber-300 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  Supabase credentials are not set in <code>.env</code>. You can click <strong>"Continue as Guest"</strong> below to use all features with local IndexedDB storage.
+                </div>
               </div>
             )}
 
-            {errorMessage && (
-              <div className="p-3 rounded-xl bg-rose-950/50 border border-rose-800 text-rose-300 text-xs">
-                {errorMessage}
-              </div>
-            )}
-
-            {successNotice && (
-              <div className="p-3 rounded-xl bg-emerald-950/50 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{successNotice}</span>
-              </div>
-            )}
-
-            {/* Email / Password Form */}
-            <form onSubmit={handleSubmit} className="space-y-3.5">
-              {isSignUp && (
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {authMode === 'signup' && (
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-300">Display Name</label>
+                  <label className="text-xs font-medium text-slate-300">Full Name</label>
                   <div className="relative">
-                    <User className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                    <UserIcon className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                     <input
                       type="text"
-                      required
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       placeholder="Jane Doe"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
                     />
                   </div>
                 </div>
@@ -162,13 +205,16 @@ export const AuthPage: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="user@example.com"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-300">Password</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-medium text-slate-300">Password</label>
+                  <span className="text-[10px] text-slate-500 font-mono">Min 6 characters</span>
+                </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
                   <input
@@ -178,22 +224,39 @@ export const AuthPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-white focus:outline-none focus:border-cyan-400"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-white focus:outline-none focus:border-cyan-400"
                   />
                 </div>
               </div>
 
+              {/* Submit button */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-2 py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-300 text-slate-950 font-heading font-bold text-xs hover:opacity-90 disabled:opacity-50 transition-all shadow-glow-cyan flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-300 text-slate-950 font-heading font-bold text-xs hover:opacity-90 disabled:opacity-50 transition-all shadow-glow-cyan flex items-center justify-center gap-2"
               >
-                <span>{isSignUp ? 'Create Free Account' : 'Sign In'}</span>
+                <span>{loading ? 'Processing...' : authMode === 'signup' ? 'Create Account' : 'Sign In'}</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
+
+              {/* Real error messages under the form */}
+              {errorMessage && (
+                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              {/* Success / Email confirm message */}
+              {infoMessage && (
+                <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-300 text-xs flex items-start gap-2 animate-pulse">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-400" />
+                  <span>{infoMessage}</span>
+                </div>
+              )}
             </form>
 
-            {/* Google OAuth Button */}
+            {/* Social OAuth & Guest Continue */}
             <div className="space-y-3 pt-2 border-t border-slate-800">
               <button
                 onClick={() => signInWithGoogle()}
@@ -224,35 +287,11 @@ export const AuthPage: React.FC = () => {
               <button
                 onClick={handleGuest}
                 type="button"
-                className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/50 text-xs font-mono font-medium transition-colors"
+                className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/50 text-xs font-mono font-medium transition-colors flex items-center justify-center gap-1.5"
               >
-                ⚡ Continue as Guest (Offline Storage Only)
+                <Compass className="w-3.5 h-3.5 text-cyan-400" />
+                Continue as Guest (IndexedDB Only)
               </button>
-            </div>
-
-            {/* Toggle Sign Up / Sign In */}
-            <div className="text-center text-xs text-slate-400 pt-1">
-              {isSignUp ? (
-                <span>
-                  Already have an account?{' '}
-                  <button
-                    onClick={() => setIsSignUp(false)}
-                    className="text-cyan-400 font-semibold hover:underline"
-                  >
-                    Sign In
-                  </button>
-                </span>
-              ) : (
-                <span>
-                  Don't have an account?{' '}
-                  <button
-                    onClick={() => setIsSignUp(true)}
-                    className="text-cyan-400 font-semibold hover:underline"
-                  >
-                    Create Free Account
-                  </button>
-                </span>
-              )}
             </div>
           </>
         )}

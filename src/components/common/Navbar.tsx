@@ -14,7 +14,8 @@ import {
   Target,
   BarChart2,
   User,
-  ShieldCheck
+  ShieldCheck,
+  LogOut
 } from 'lucide-react';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { useAuth } from '../../context/AuthContext';
@@ -22,7 +23,7 @@ import { useAuth } from '../../context/AuthContext';
 export const Navbar: React.FC = () => {
   const location = useLocation();
   const isOnline = useOnlineStatus();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   const navItems = [
     { name: 'Home', path: '/', icon: Sparkles },
@@ -110,19 +111,35 @@ export const Navbar: React.FC = () => {
             )}
           </div>
 
-          {/* User / Login Profile Link */}
-          <Link
-            to="/auth"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-heading font-medium border transition-colors ${user
-                ? 'bg-violet-950/60 border-violet-800/60 text-violet-300'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
-              }`}
-          >
-            <User className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden md:inline">
-              {user ? (user.email ? user.email.split('@')[0] : 'Profile') : 'Sign In'}
-            </span>
-          </Link>
+          {/* User Email & Sign Out Button or Sign In Button */}
+          {user ? (
+            <div className="flex items-center gap-1.5">
+              <Link
+                to="/auth"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium border bg-violet-950/60 border-violet-800/60 text-violet-300 max-w-[150px] sm:max-w-[200px] truncate"
+                title={`Signed in as ${user.email}`}
+              >
+                <User className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                <span className="truncate">{user.email}</span>
+              </Link>
+              <button
+                onClick={() => signOut()}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-heading font-semibold border border-rose-500/40 text-rose-300 hover:bg-rose-950/50 transition-colors"
+                title="Sign out of Supabase"
+              >
+                <LogOut className="w-3 h-3" />
+                <span className="hidden sm:inline">Sign out</span>
+              </button>
+            </div>
+          ) : (
+            <Link
+              to="/auth"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-heading font-medium border bg-slate-900 border-slate-800 text-slate-400 hover:text-white transition-colors"
+            >
+              <User className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Sign In</span>
+            </Link>
+          )}
 
           {/* Quick Studio Action */}
           <Link
