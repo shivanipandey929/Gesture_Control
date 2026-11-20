@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Download, X } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
+import { Download, Share, X } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -7,20 +8,52 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 export const PwaInstallPrompt: React.FC = () => {
+  const location = useLocation();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    return localStorage.getItem('aerotouch_pwa_dismissed') === 'true';
+  });
+  const [hasUsed60s, setHasUsed60s] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIosSafari, setIsIosSafari] = useState(false);
 
   useEffect(() => {
+    // Check if already installed
+    const standalone = window.matchMedia('(display-mode: standalone)').matches;
+    setIsStandalone(standalone);
+
+    // iOS detection
+    const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    const isSafari = !/crios|fxios|chrome/i.test(window.navigator.userAgent);
+    setIsIosSafari(isIos && isSafari && !standalone);
+
+    // 60-second usage timer requirement
+    const timer = setTimeout(() => {
+      setHasUsed60s(true);
+    }, 60000);
+
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('beforeinstallprompt', handler);
+    };
   }, []);
 
-  if (!deferredPrompt || dismissed) return null;
+  // Show only on /settings or /help, after 60s, if not standalone and not dismissed
+  const isAllowedPage = location.pathname === '/settings' || location.pathname === '/help';
+  if (!isAllowedPage || !hasUsed60s || dismissed || isStandalone) {
+    return null;
+  }
+
+  // If on desktop/android with prompt or iOS hint
+  if (!deferredPrompt && !isIosSafari) {
+    return null;
+  }
 
   const handleInstall = async () => {
     if (!deferredPrompt) return;
@@ -31,32 +64,45 @@ export const PwaInstallPrompt: React.FC = () => {
     }
   };
 
+  const handleDismiss = () => {
+    setDismissed(true);
+    localStorage.setItem('aerotouch_pwa_dismissed', 'true');
+  };
+
   return (
-    <div className="fixed bottom-6 left-6 z-40 max-w-sm p-4 rounded-2xl glass-panel-glow border border-cyan-500/50 bg-[#0B1020]/95 shadow-2xl flex items-center justify-between gap-3 animate-fade-in">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-400 to-violet-600 flex items-center justify-center text-slate-950 font-bold">
-          <Download className="w-5 h-5 text-slate-950" />
+    <section
+      aria-label="Install AeroTouch App"
+      className="fixed bottom-6 left-6 z-40 max-w-sm p-4 rounded-2xl bg-[#111827]/95 border border-cyan-500/40 text-white shadow-xl backdrop-blur-md flex items-start justify-between gap-3 animate-fade-in"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-700/60 flex items-center justify-center text-cyan-400 shrink-0">
+          {isIosSafari ? <Share className="w-5 h-5" /> : <Download className="w-5 h-5" />}
         </div>
-        <div>
-          <div className="font-heading font-bold text-xs text-white">Install AeroTouch App</div>
-          <div className="text-[11px] text-slate-400">Offline PWA with desktop window launch</div>
+        <div className="space-y-1 text-xs">
+          <div className="font-heading font-bold text-white text-sm">Install AeroTouch App</div>
+          <p className="text-slate-300 leading-relaxed">
+            {isIosSafari
+              ? 'To install on iOS: tap Share, then tap "Add to Home Screen".'
+              : 'Add to your home screen or desktop for full offline launch.'}
+          </p>
+          {!isIosSafari && deferredPrompt && (
+            <button
+              onClick={handleInstall}
+              className="mt-2 px-3 py-1.5 rounded-lg bg-cyan-400 text-slate-950 font-heading font-bold text-xs hover:bg-cyan-300 transition-colors"
+            >
+              Install App
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleInstall}
-          className="px-3 py-1.5 rounded-lg bg-cyan-400 text-slate-950 font-heading font-bold text-xs hover:bg-cyan-300 transition-colors shadow-glow-cyan"
-        >
-          Install
-        </button>
-        <button
-          onClick={() => setDismissed(true)}
-          className="p-1.5 text-slate-400 hover:text-white"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
+      <button
+        onClick={handleDismiss}
+        className="p-1 rounded text-slate-400 hover:text-white"
+        aria-label="Dismiss installation prompt"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </section>
   );
 };

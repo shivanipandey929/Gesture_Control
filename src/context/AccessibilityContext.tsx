@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { getSetting, setSetting } from '../db/db';
 
 export interface AccessibilitySettings {
@@ -11,6 +11,7 @@ export interface AccessibilitySettings {
   lowEndLaptopMode: boolean; // 320x240 @ 15-20 FPS
   sensitivity: number; // 0.5 to 1.0
   gestureThresholdMs: number; // 500ms when accessible vs 350ms standard
+  theme: 'dark' | 'light';
 }
 
 const DEFAULT_SETTINGS: AccessibilitySettings = {
@@ -23,6 +24,7 @@ const DEFAULT_SETTINGS: AccessibilitySettings = {
   lowEndLaptopMode: false,
   sensitivity: 0.7,
   gestureThresholdMs: 350,
+  theme: 'light',
 };
 
 interface AccessibilityContextType {
@@ -41,16 +43,29 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
   const [continuousHandSeconds, setContinuousHandSeconds] = useState<number>(0);
   const [showFatigueNotice, setShowFatigueNotice] = useState<boolean>(false);
 
-  // Load from Dexie DB
+  // Load from Dexie DB & LocalStorage
   useEffect(() => {
     async function load() {
       const saved = await getSetting<AccessibilitySettings>('user_accessibility_settings', DEFAULT_SETTINGS);
+      const storedTheme = (localStorage.getItem('theme') || localStorage.getItem('aerotouch_theme')) as 'dark' | 'light' | null;
+      const systemPrefersDark = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const resolvedTheme: 'dark' | 'light' = storedTheme || (systemPrefersDark ? 'dark' : 'light');
+      
+      saved.theme = resolvedTheme;
       setSettings(saved);
+
       if (saved.highContrast) {
         document.documentElement.classList.add('high-contrast');
       }
       if (saved.largeText) {
         document.documentElement.classList.add('text-lg-mode');
+      }
+      if (resolvedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light-theme');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light-theme');
       }
     }
     load();
@@ -73,6 +88,17 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       setSetting('user_accessibility_settings', merged);
+      if (merged.theme) {
+        localStorage.setItem('theme', merged.theme);
+        localStorage.setItem('aerotouch_theme', merged.theme);
+        if (merged.theme === 'dark') {
+          document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light-theme');
+        } else {
+          document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light-theme');
+        }
+      }
 
       // Apply HTML class modifications
       if (merged.highContrast) {
@@ -87,27 +113,40 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
         document.documentElement.classList.remove('text-lg-mode');
       }
 
+      if (merged.theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light-theme');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light-theme');
+      }
+
       return merged;
     });
   };
 
   // Continuous hand tracker for fatigue reminder (3 minutes = 180 seconds)
+  // Only counts while a hand is actively detected in the camera feed.
+  const isHandActiveRef = useRef<boolean>(false);
+
   const recordHandPresence = (present: boolean) => {
+    isHandActiveRef.current = present;
     if (!present) {
-      // Allow brief loss of tracking without instantly resetting, but decay
-      setContinuousHandSeconds((prev) => Math.max(0, prev - 1));
+      setContinuousHandSeconds(0);
     }
   };
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setContinuousHandSeconds((prev) => {
-        const next = prev + 1;
-        if (next >= 180 && !showFatigueNotice) {
-          setShowFatigueNotice(true);
-        }
-        return next;
-      });
+      if (isHandActiveRef.current) {
+        setContinuousHandSeconds((prev) => {
+          const next = prev + 1;
+          if (next >= 180 && !showFatigueNotice) {
+            setShowFatigueNotice(true);
+          }
+          return next;
+        });
+      }
     }, 1000);
 
     return () => clearInterval(timer);
@@ -133,20 +172,20 @@ export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({
 
       {/* Fatigue Reminder Toast / Modal */}
       {showFatigueNotice && (
-        <div className="fixed top-20 right-6 z-50 max-w-sm p-5 rounded-2xl glass-panel-glow border-2 border-amber-500 bg-[#0B1020]/95 shadow-2xl animate-bounce">
+        <div className="fixed top-20 right-6 z-50 max-w-sm p-5 rounded-2xl panel-card border-2 border-warning bg-surface text-foreground shadow-elevated animate-bounce">
           <div className="flex items-start gap-3">
-            <span className="text-2xl">☕</span>
+            <span className="text-2xl" role="img" aria-label="coffee">☕</span>
             <div className="flex-1">
-              <h4 className="font-heading font-bold text-white text-base mb-1">
+              <h4 className="font-heading font-bold text-foreground text-base mb-1">
                 Take a Friendly Rest!
               </h4>
-              <p className="text-xs text-slate-300 leading-relaxed mb-3">
+              <p className="text-xs text-muted leading-relaxed mb-3">
                 You've been holding your hand up continuously for over <strong>3 minutes</strong>. Lower your arm, relax your shoulder, and shake out your wrist to prevent strain.
               </p>
               <div className="flex gap-2">
                 <button
                   onClick={dismissFatigueNotice}
-                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 text-slate-950 font-heading text-xs font-bold hover:bg-amber-400"
+                  className="px-4 py-2 rounded-xl bg-warning hover:opacity-90 text-white font-heading text-xs font-semibold transition-opacity"
                 >
                   I'm Rested, Continue
                 </button>

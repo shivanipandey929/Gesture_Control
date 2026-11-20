@@ -64,7 +64,8 @@ create table if not exists public.gesture_profiles (
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-alter table public.gesture_profiles enable row level security;
+alter table public.gesture_
+profiles enable row level security;
 
 create policy "Users can CRUD own gesture profiles"
   on public.gesture_profiles for all

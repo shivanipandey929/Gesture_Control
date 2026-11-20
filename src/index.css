@@ -2,77 +2,292 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --background: #F4F7FF;
+  --background-end: #EEF4FF;
+  --navbar: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-secondary: #EAF0FF;
+  --surface-lavender: #EAF0FF;
+  --foreground: #0B1220;
+  --muted: #475569;
+  --border: #D9E2F5;
+  --primary: #1D63E8;
+  --primary-hover: #174FC0;
+  --primary-light: #EAF0FF;
+  --accent: #0E9AB8;
+  --secondary-violet: #7C3AED;
+  --success: #16A34A;
+  --warning: #D97706;
+  --error: #DC2626;
+}
+
+html.dark {
+  --background: #080F1F;
+  --background-end: #080F1F;
+  --navbar: #111C35;
+  --surface: #172640;
+  --surface-secondary: #111C35;
+  --surface-lavender: #1E2D4A;
+  --foreground: #F8FAFC;
+  --muted: #94A3B8;
+  --border: #243457;
+  --primary: #2979FF;
+  --primary-hover: #1D63E8;
+  --primary-light: #162B50;
+  --accent: #00E5FF;
+  --secondary-violet: #8B5CF6;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --error: #EF4444;
+}
+
 @layer base {
   body {
-    background-color: #0B1020;
-    color: #F8FAFC;
+    background-color: var(--background);
+    background-image: radial-gradient(at 0% 0%, rgba(29, 99, 232, 0.08) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(14, 154, 184, 0.08) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(124, 58, 237, 0.06) 0px, transparent 50%);
+    background-attachment: fixed;
+    color: var(--foreground);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.625;
+    /* 26px on 16px */
+    min-height: 100vh;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  html.dark body {
+    background-image: radial-gradient(at 0% 0%, rgba(41, 121, 255, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(0, 229, 255, 0.04) 0px, transparent 50%);
+  }
+
+  /* Type Scale: Space Grotesk for H1 and H2 only; Inter for H3 and body */
+  h1 {
     font-family: 'Space Grotesk', sans-serif;
+    font-size: 2.5rem;
+    /* 40px mobile */
+    line-height: 3rem;
+    /* 48px */
+    font-weight: 700;
+    color: var(--foreground);
+    letter-spacing: -0.025em;
+  }
+
+  @media (min-width: 640px) {
+    h1 {
+      font-size: 3.5rem;
+      /* 56px desktop */
+      line-height: 4rem;
+      /* 64px */
+    }
+  }
+
+  h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 2.25rem;
+    /* 36px */
+    line-height: 2.75rem;
+    /* 44px */
+    font-weight: 700;
+    color: var(--foreground);
+    letter-spacing: -0.02em;
+  }
+
+  h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.25rem;
+    /* 20px */
+    line-height: 1.75rem;
+    /* 28px */
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  p {
+    font-size: 1rem;
+    /* 16px */
+    line-height: 1.625rem;
+    /* 26px */
+  }
+
+  small,
+  .text-sm {
+    font-size: 0.875rem;
+    /* 14px */
+    line-height: 1.25rem;
+    /* 20px */
   }
 }
 
-/* Accessibility High Contrast Mode */
-html.high-contrast body {
-  background-color: #000000 !important;
-  color: #FFFFFF !important;
-}
-
-html.high-contrast .glass-panel {
-  background: #000000 !important;
-  border: 2px solid #22D3EE !important;
-  box-shadow: 0 0 15px rgba(34, 211, 238, 0.4) !important;
-}
-
-html.high-contrast .text-slate-400,
-html.high-contrast .text-slate-500 {
-  color: #E2E8F0 !important;
-}
-
-/* Accessibility Large Text Mode */
-html.text-lg-mode {
-  font-size: 112%;
-}
-
-/* Glassmorphism custom styling */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-.glass-panel-glow {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(34, 211, 238, 0.25);
-  box-shadow: 0 0 25px -5px rgba(34, 211, 238, 0.25);
-}
-
+/* 20px radius cards with 1px border and soft shadow */
+.panel-card,
+.glass-panel,
+.glass-panel-glow,
 .glass-panel-violet {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(139, 92, 246, 0.25);
-  box-shadow: 0 0 25px -5px rgba(139, 92, 246, 0.25);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: 0 4px 20px -2px rgba(11, 18, 32, 0.05);
+  color: var(--foreground);
 }
 
-/* Custom scrollbars */
+/* Soft Panel */
+.panel-lavender {
+  background: var(--surface-lavender);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+/* Standard Button specs: 44px high, 12px radius, visible focus ring, hover lift of 2px, press scale 0.98 */
+.btn-primary {
+  height: 44px;
+  border-radius: 12px;
+  background-color: var(--primary);
+  color: #FFFFFF;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 2px 4px rgba(29, 99, 232, 0.15);
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(29, 99, 232, 0.22);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-primary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.btn-secondary {
+  height: 44px;
+  border-radius: 12px;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.btn-secondary:hover {
+  background-color: var(--surface-secondary);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+.btn-secondary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Clean Subtle Scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #0B1020;
+  background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #1F2937;
-  border-radius: 4px;
+  background: var(--border);
+  border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #374151;
+  background: var(--muted);
+}
+
+/* Indic & Arabic Typography Accommodations */
+html.script-indic body {
+  font-family: var(--current-font-family, 'Noto Sans Devanagari', 'Inter', sans-serif) !important;
+  line-height: 1.68 !important;
+}
+
+html.script-arabic body {
+  font-family: var(--current-font-family, 'Noto Sans Arabic', 'Segoe UI', Tahoma, sans-serif) !important;
+  line-height: 1.75 !important;
+}
+
+[dir="rtl"] {
+  text-align: start;
+}
+
+[dir="rtl"] .rtl-flip {
+  transform: scaleX(-1);
+}
+
+/* High Contrast Mode */
+html.high-contrast {
+  --background: #000000;
+  --surface: #000000;
+  --surface-secondary: #0a0a0a;
+  --surface-lavender: #000000;
+  --foreground: #FFFFFF;
+  --muted: #E2E8F0;
+  --border: #4F46E5;
+  --primary: #818CF8;
+}
+
+/* Auth Page GPU Translucent Wave Animations */
+@keyframes waveDriftSlow {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes waveDriftMid {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes waveDriftFast {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-wave-slow {
+  animation: waveDriftSlow 32s linear infinite;
+  will-change: transform;
+}
+
+.animate-wave-mid {
+  animation: waveDriftMid 24s linear infinite reverse;
+  will-change: transform;
+}
+
+.animate-wave-fast {
+  animation: waveDriftFast 16s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-wave-slow,
+  .animate-wave-mid,
+  .animate-wave-fast {
+    animation: none !important;
+  }
 }

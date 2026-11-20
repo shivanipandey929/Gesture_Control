@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { exportAllUserData, clearAllUserData } from '../db/db';
 
 interface AuthResponse {
   error: AuthError | Error | null;
@@ -14,10 +15,17 @@ interface AuthContextType {
   isLoading: boolean;
   isConfigured: boolean;
   continueAsGuest: () => void;
+  exitGuestMode: () => void;
   signInWithEmail: (email: string, password: string) => Promise<AuthResponse>;
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<AuthResponse>;
+  verifyOtp: (email: string, token: string) => Promise<AuthResponse>;
+  resendOtp: (email: string) => Promise<AuthResponse>;
+  resetPasswordForEmail: (email: string) => Promise<AuthResponse>;
+  updateUserPassword: (newPassword: string) => Promise<AuthResponse>;
   signInWithGoogle: () => Promise<AuthResponse>;
   signOut: () => Promise<void>;
+  exportUserData: () => Promise<string>;
+  deleteAccountAndData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,18 +34,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isGuest, setIsGuest] = useState<boolean>(() => {
-    return localStorage.getItem('aerotouch_auth_mode') !== 'authenticated';
+    return localStorage.getItem('aerotouch_auth_mode') === 'guest';
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
     if (!supabase) {
       setIsLoading(false);
-      setIsGuest(true);
+      setIsGuest(localStorage.getItem('aerotouch_auth_mode') === 'guest');
       return;
     }
 
-    // Check active session from localStorage
+    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -46,15 +54,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('aerotouch_auth_mode', 'authenticated');
       } else {
         const mode = localStorage.getItem('aerotouch_auth_mode');
-        setIsGuest(mode !== 'authenticated');
+        setIsGuest(mode === 'guest');
       }
       setIsLoading(false);
     }).catch(() => {
       setIsLoading(false);
-      setIsGuest(true);
+      setIsGuest(localStorage.getItem('aerotouch_auth_mode') === 'guest');
     });
 
-    // Listen for auth state changes (e.g. login, logout, token refresh)
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setUser(newSession?.user ?? null);
@@ -62,7 +70,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsGuest(false);
         localStorage.setItem('aerotouch_auth_mode', 'authenticated');
       } else {
-        setIsGuest(true);
+        const mode = localStorage.getItem('aerotouch_auth_mode');
+        setIsGuest(mode === 'guest');
       }
       setIsLoading(false);
     });
@@ -75,10 +84,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('aerotouch_auth_mode', 'guest');
   };
 
+  const exitGuestMode = () => {
+    setIsGuest(false);
+    localStorage.removeItem('aerotouch_auth_mode');
+  };
+
   const signInWithEmail = async (email: string, password: string): Promise<AuthResponse> => {
     if (!supabase) {
       return {
-        error: new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.')
+        error: new Error('Cloud sync service is currently unconfigured. You can continue as a Guest.')
       };
     }
 
@@ -108,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUpWithEmail = async (email: string, password: string, displayName?: string): Promise<AuthResponse> => {
     if (!supabase) {
       return {
-        error: new Error('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.')
+        error: new Error('Cloud sync service is currently unconfigured. You can continue as a Guest.')
       };
     }
 
@@ -128,19 +142,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: res.error };
       }
 
-      // Check if user already exists (Supabase returns empty identities array when user already exists and email confirm is on)
       if (res.data.user && res.data.user.identities && res.data.user.identities.length === 0) {
         return {
-          error: new Error('An account with this email already exists. Please switch to Sign In.')
+          error: new Error('An account with this email already exists. Please switch to Sign in.')
         };
       }
 
-      // If Supabase requires email confirmation, session will be null
+      // If email confirmation is required, session is initially null
       if (res.data.user && !res.data.session) {
         return { error: null, needsEmailConfirmation: true };
       }
 
-      // If auto-confirmed
       if (res.data.session) {
         setSession(res.data.session);
         setUser(res.data.user);
@@ -154,9 +166,92 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const verifyOtp = async (email: string, token: string): Promise<AuthResponse> => {
+    if (!supabase) {
+      return { error: new Error('Cloud sync service is unconfigured.') };
+    }
+
+    try {
+      // First try type 'signup'
+      let res = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: token.trim(),
+        type: 'signup',
+      });
+
+      // If type 'signup' failed, retry with type 'email' (login/recovery OTP)
+      if (res.error) {
+        res = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: token.trim(),
+          type: 'email',
+        });
+      }
+
+      if (res.error) {
+        return { error: res.error };
+      }
+
+      if (res.data.session) {
+        setSession(res.data.session);
+        setUser(res.data.user);
+        setIsGuest(false);
+        localStorage.setItem('aerotouch_auth_mode', 'authenticated');
+      }
+
+      return { error: null };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  };
+
+  const resendOtp = async (email: string): Promise<AuthResponse> => {
+    if (!supabase) {
+      return { error: new Error('Cloud sync service is unconfigured.') };
+    }
+
+    try {
+      const res = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+      });
+      return { error: res.error };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  };
+
+  const resetPasswordForEmail = async (email: string): Promise<AuthResponse> => {
+    if (!supabase) {
+      return { error: new Error('Cloud sync service is unconfigured.') };
+    }
+
+    try {
+      const res = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth?reset=true`,
+      });
+      return { error: res.error };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  };
+
+  const updateUserPassword = async (newPassword: string): Promise<AuthResponse> => {
+    if (!supabase) {
+      return { error: new Error('Cloud sync service is unconfigured.') };
+    }
+
+    try {
+      const res = await supabase.auth.updateUser({ password: newPassword });
+      return { error: res.error };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error(String(err)) };
+    }
+  };
+
   const signInWithGoogle = async (): Promise<AuthResponse> => {
     if (!supabase) {
-      return { error: new Error('Supabase is not configured.') };
+      return { error: new Error('Google sign-in is not set up yet.') };
     }
     try {
       const res = await supabase.auth.signInWithOAuth({
@@ -181,8 +276,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setSession(null);
-    setIsGuest(true);
-    localStorage.setItem('aerotouch_auth_mode', 'guest');
+    setIsGuest(false);
+    localStorage.removeItem('aerotouch_auth_mode');
+  };
+
+  const exportUserData = async (): Promise<string> => {
+    return await exportAllUserData();
+  };
+
+  const deleteAccountAndData = async (): Promise<void> => {
+    await clearAllUserData();
+    await signOut();
   };
 
   return (
@@ -194,10 +298,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         isConfigured: isSupabaseConfigured,
         continueAsGuest,
+        exitGuestMode,
         signInWithEmail,
         signUpWithEmail,
+        verifyOtp,
+        resendOtp,
+        resetPasswordForEmail,
+        updateUserPassword,
         signInWithGoogle,
         signOut,
+        exportUserData,
+        deleteAccountAndData,
       }}
     >
       {children}

@@ -4,6 +4,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     VitePWA({
@@ -11,37 +15,84 @@ export default defineConfig({
       includeAssets: [
         'favicon.svg',
         'robots.txt',
+        'pwa-192x192.png',
+        'pwa-512x512.png',
+        'pwa-512x512-maskable.png',
+        'pwa-192x192.svg',
+        'pwa-512x512.svg',
+        'screenshots/wide.png',
+        'screenshots/narrow.png',
         'wasm/*.wasm',
         'wasm/*.js',
         'models/*.task',
-        'gesture_recognizer.task'
+        'media/*'
       ],
       manifest: {
+        id: '/',
         name: 'AeroTouch — AI Hand Gesture Studio',
         short_name: 'AeroTouch',
-        description: 'Next-gen touchless hand gesture interface with offline WebAssembly AI',
+        description: 'Touchless hand gesture control studio with low-latency in-browser AI',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        orientation: 'any',
         theme_color: '#0B1020',
         background_color: '#0B1020',
-        display: 'standalone',
-        orientation: 'portrait',
+        categories: ['utilities', 'productivity', 'accessibility'],
         icons: [
+          {
+            src: '/pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/pwa-512x512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
+          },
           {
             src: '/pwa-192x192.svg',
             sizes: '192x192',
             type: 'image/svg+xml',
-            purpose: 'any maskable'
+            purpose: 'any'
           },
           {
             src: '/pwa-512x512.svg',
             sizes: '512x512',
             type: 'image/svg+xml',
-            purpose: 'any maskable'
+            purpose: 'any'
+          }
+        ],
+        screenshots: [
+          {
+            src: '/screenshots/wide.png',
+            sizes: '1280x720',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'AeroTouch Studio Desktop Mode'
+          },
+          {
+            src: '/screenshots/narrow.png',
+            sizes: '750x1334',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'AeroTouch Studio Mobile View'
           }
         ]
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 30 * 1024 * 1024, // 30 MB to precache MediaPipe WASM & .task models
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,task}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,task,wav,mp3,woff,woff2}'],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/wasm/') || url.pathname.endsWith('.task'),
@@ -54,17 +105,6 @@ export default defineConfig({
               },
               cacheableResponse: {
                 statuses: [0, 200]
-              }
-            }
-          },
-          {
-            urlPattern: ({ url }) => url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'google-fonts',
-              expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 60 * 60 * 24 * 365
               }
             }
           }

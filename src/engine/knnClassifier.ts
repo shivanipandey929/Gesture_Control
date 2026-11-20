@@ -121,6 +121,20 @@ export class CustomGestureKNN {
   getTrainedCount(): number {
     return this.customGestures.length;
   }
+
+  addInMemoryGesture(name: string, action: string, landmarksList: NormalizedLandmark[][]): void {
+    this.customGestures.push({
+      name,
+      action,
+      samples: landmarksList.map((lm) => normalizeLandmarks(lm)),
+      createdAt: Date.now(),
+      synced: false,
+    });
+  }
+
+  clear(): void {
+    this.customGestures = [];
+  }
 }
 
 export const customKNN = new CustomGestureKNN();
